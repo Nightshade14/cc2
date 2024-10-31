@@ -23,6 +23,8 @@ title = "TODO with Flask"
 heading = "ToDo Reminder"
 # modify=ObjectId()
 
+a2 = None
+
 
 def redirect_url():
     return request.args.get("next") or request.referrer or url_for("index")
@@ -137,14 +139,13 @@ def search():
                     error="No such ObjectId is present",
                 )
         except InvalidId as err:
-            pass
             return render_template(
                 "index.html",
                 a2=a2,
                 todos=todos_l,
                 t=title,
                 h=heading,
-                error="Invalid ObjectId format given",
+                error="Invalid ObjectId format given" + "\nError: " + err,
             )
     else:
         todos_l = todos.find({refer: key})
@@ -160,6 +161,4 @@ if __name__ == "__main__":
     env = os.environ.get("FLASK_ENV", "development")
     port = int(os.environ.get("PORT", 5000))
     debug = False if env == "production" else True
-    app.run(debug=True)
-    app.run(port=port, debug=debug)
-    # Careful with the debug mode..
+    app.run(host="0.0.0.0", port=port, debug=debug)
