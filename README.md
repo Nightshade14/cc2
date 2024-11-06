@@ -1,4 +1,4 @@
-# Docker and Kubernetes demo with AWS
+# Docker and Kubernetes demo with AWS EKS
 
 ## TODO app
 
