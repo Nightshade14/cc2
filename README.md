@@ -9,3 +9,4 @@
 - Database: MongoDB
   - Persistent Storage
  - Monitoring: Prometheus
+     - Alerting Service
