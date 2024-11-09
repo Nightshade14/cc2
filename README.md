@@ -2,6 +2,7 @@
 
 ## TODO app
 
+- Web Server: flask
 - Containerization: Docker
 - Scaling: Kubernetes
   - Rolling Updates
