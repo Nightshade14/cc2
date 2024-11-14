@@ -1,14 +1,17 @@
 from flask import (
     Flask,
+    jsonify,
     render_template,
     request,
     redirect,
     url_for,
 )  # For flask implementation
 from pymongo import MongoClient  # Database connector
+from pymongo.errors import ConnectionFailure
 from bson.objectid import ObjectId  # For ObjectId to work
 from bson.errors import InvalidId  # For catching InvalidId exception for ObjectId
 import os
+from prometheus_flask_exporter import PrometheusMetrics
 
 mongodb_host = os.environ.get("MONGO_HOST", "localhost")
 mongodb_port = int(os.environ.get("MONGO_PORT", "27017"))
@@ -20,14 +23,51 @@ todos = db.todo  # Select the collection
 
 app = Flask(__name__)
 title = "TODO with Flask"
-heading = "ToDo Reminder"
+heading = "ToDo Reminder:V3"
 # modify=ObjectId()
 
-a2 = None
+a2 = "active"
+metrics = PrometheusMetrics(app)
+
+# Custom metrics
+metrics.info("todo_app_info", "Application information", version="1.0.0")
+todo_items_total = metrics.counter("todo_items_total", "Number of todo items created")
+mongodb_operations = metrics.counter(
+    "mongodb_operations_total", "Number of MongoDB operations"
+)
+
+mongodb_connection_failures = metrics.counter(
+    "mongodb_connection_failures_total", "Number of MongoDB connection failures"
+)
 
 
 def redirect_url():
     return request.args.get("next") or request.referrer or url_for("index")
+
+
+# liveness probe endpoint
+@app.route("/health")
+@metrics.counter("health_check_requests_total", "Number of health check requests")
+def healthz():
+    # This endpoint returns a simple 200 OK response to indicate that the app is alive
+    return jsonify(status="alive"), 200
+
+
+# Readiness probe endpoint
+@app.route("/ready")
+@metrics.counter(
+    "readiness_check_total",
+    "Number of readiness checks",
+    labels={"status": lambda r: str(r.status_code)},
+)
+def ready():
+    try:
+        client.admin.command("ping")
+        return jsonify(status="ready"), 200
+    except ConnectionFailure:
+        # If there's a connection failure, return a 503 Service Unavailable status
+        mongodb_connection_failures.inc()
+        return jsonify(status="unready"), 503
 
 
 @app.route("/list")
@@ -86,16 +126,27 @@ def action():
     desc = request.values.get("desc")
     date = request.values.get("date")
     pr = request.values.get("pr")
-    todos.insert_one({"name": name, "desc": desc, "date": date, "pr": pr, "done": "no"})
-    return redirect("/list")
+    try:
+        todos.insert_one(
+            {"name": name, "desc": desc, "date": date, "pr": pr, "done": "no"}
+        )
+        todo_items_total.inc()
+        mongodb_operations.labels(operation_type="create").inc()
+        return redirect("/list")
+    except Exception:
+        return jsonify({"error": "Failed to create todo"}), 500
 
 
 @app.route("/remove")
 def remove():
     # Deleting a Task with various references
     key = request.values.get("_id")
-    todos.delete_one({"_id": ObjectId(key)})
-    return redirect("/")
+    try:
+        todos.delete_one({"_id": ObjectId(key)})
+        mongodb_operations.labels(operation_type="delete").inc()
+        return redirect("/")
+    except Exception:
+        return jsonify({"error": "Failed to delete todo"}), 500
 
 
 @app.route("/update")
@@ -145,7 +196,7 @@ def search():
                 todos=todos_l,
                 t=title,
                 h=heading,
-                error="Invalid ObjectId format given" + "\nError: " + err,
+                error="Invalid ObjectId format given: " + str(err),
             )
     else:
         todos_l = todos.find({refer: key})
@@ -158,7 +209,6 @@ def about():
 
 
 if __name__ == "__main__":
-    env = os.environ.get("FLASK_ENV", "development")
+    env = os.environ.get("FLASK_ENV", "production")
     port = int(os.environ.get("PORT", 5000))
-    debug = False if env == "production" else True
-    app.run(host="0.0.0.0", port=port, debug=debug)
+    app.run(port=port, debug=False)
