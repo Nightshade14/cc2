@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: flask-todo
+  labels:
+    app: flask-todo
+spec:
+  selector:
+    app: flask-todo
+  ports:
+    - name: http
+      port: 80
+      targetPort: 5000

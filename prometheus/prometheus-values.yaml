@@ -1,0 +1,48 @@
+alertmanager:
+  enabled: true
+  config:
+    global:
+      slack_api_url: "https://hooks.slack.com/services/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"
+    route:
+      group_by: ["alertname", "namespace"]
+      group_wait: 15s
+      group_interval: 15s
+      repeat_interval: 15s
+      receiver: "slack"
+    receivers:
+      - name: "slack"
+        slack_configs:
+          - channel: "#eks-alerts"
+            send_resolved: true
+
+serverFiles:
+  alerting_rules.yml:
+    groups:
+      - name: todo-app-alerts
+        rules:
+          - alert: PodNotRunning
+            expr: kube_pod_status_phase{phase=~"Failed|Pending|Unknown",namespace="default"} > 0
+            for: 15s
+            labels:
+              severity: critical
+            annotations:
+              summary: "Pod {{ $labels.pod }} is not running"
+              description: "Pod {{ $labels.pod }} has been in {{ $labels.phase }} state for more than 5 minutes"
+
+          - alert: HighFailedProbes
+            expr: rate(probe_success{job="todo-app"}[15s]) < 0.7
+            for: 15s
+            labels:
+              severity: warning
+            annotations:
+              summary: "High probe failure rate detected"
+              description: "Health check failure rate is above 30%"
+
+          - alert: MongoDBConnectionFailed
+            expr: mongodb_up == 0
+            for: 15s
+            labels:
+              severity: critical
+            annotations:
+              summary: "MongoDB connection failed"
+              description: "Application cannot connect to MongoDB"

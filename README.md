@@ -9,5 +9,5 @@
   - Health check with probes
 - Database: MongoDB
   - Persistent Storage
- - Monitoring: Prometheus
-     - Alerting Service
+- Monitoring: Prometheus
+  - Alerting Service
